@@ -34,6 +34,29 @@ def _window_margin(matrix: np.ndarray, step_index: int, window_index: int) -> fl
     return score - float(other_scores.max())
 
 
+def _window_runner_up(
+    matrix: np.ndarray,
+    steps: list[dict[str, Any]],
+    step_index: int,
+    window_index: int,
+) -> dict[str, Any]:
+    if matrix.shape[0] == 1:
+        return {
+            "runner_up_step_id": "--",
+            "runner_up_step_name": "--",
+            "runner_up_score": 0.0,
+        }
+    window_scores = np.asarray(matrix[:, window_index], dtype=np.float32).copy()
+    window_scores[step_index] = -np.inf
+    runner_up_index = int(np.argmax(window_scores))
+    runner_up_step = steps[runner_up_index]
+    return {
+        "runner_up_step_id": runner_up_step["id"],
+        "runner_up_step_name": runner_up_step["name"],
+        "runner_up_score": round(float(window_scores[runner_up_index]), 6),
+    }
+
+
 def _window_center(window: dict[str, Any]) -> float:
     return (float(window["start"]) + float(window["end"])) / 2.0
 
@@ -105,6 +128,7 @@ def _build_summary_row(
     window: dict[str, Any],
     best_score: float,
     margin: float,
+    runner_up: dict[str, Any],
     status: str,
     reason_parts: list[str],
 ) -> dict[str, Any]:
@@ -117,6 +141,7 @@ def _build_summary_row(
         "candidate_time_range": window["time_range"],
         "best_score": round(best_score, 6),
         "margin": round(margin, 6),
+        **runner_up,
         "status": status,
         "reason": "；".join(reason_parts),
     }
@@ -150,6 +175,7 @@ def summarize_steps(
             score_median_context_seconds,
         )
         margin = _window_margin(matrix, step_index, best_window_index)
+        runner_up = _window_runner_up(matrix, steps, step_index, best_window_index)
 
         status, reason_parts = _classify_score(
             best_score,
@@ -172,7 +198,7 @@ def summarize_steps(
         if status == "completed":
             last_completed_start = float(best_window["start"])
 
-        rows.append(_build_summary_row(step, best_window, best_score, margin, status, reason_parts))
+        rows.append(_build_summary_row(step, best_window, best_score, margin, runner_up, status, reason_parts))
 
     return rows
 
@@ -247,6 +273,7 @@ def summarize_steps_sequence(
             score_median_context_seconds,
         )
         margin = _window_margin(matrix, step_index, window_index)
+        runner_up = _window_runner_up(matrix, steps, step_index, window_index)
         status, reason_parts = _classify_score(
             best_score,
             margin,
@@ -257,7 +284,7 @@ def summarize_steps_sequence(
         )
         reason_parts = score_reason_parts + reason_parts
         reason_parts.append("时序解码选择窗口")
-        rows.append(_build_summary_row(step, window, best_score, margin, status, reason_parts))
+        rows.append(_build_summary_row(step, window, best_score, margin, runner_up, status, reason_parts))
     return rows
 
 
@@ -288,6 +315,9 @@ def write_scores_csv(path: str | Path, rows: list[dict[str, Any]]) -> None:
         "candidate_time_range",
         "best_score",
         "margin",
+        "runner_up_step_id",
+        "runner_up_step_name",
+        "runner_up_score",
         "status",
         "reason",
     ]
@@ -303,17 +333,18 @@ def write_report_md(path: str | Path, rows: list[dict[str, Any]]) -> None:
     lines = [
         "# 视频步骤核验报告",
         "",
-        "| 步骤 | 状态 | 最佳时间段 | 分数 | Margin | 说明 |",
-        "| --- | --- | --- | ---: | ---: | --- |",
+        "| 步骤 | 状态 | 最佳时间段 | 分数 | Margin | 同一窗口第二名步骤 | 说明 |",
+        "| --- | --- | --- | ---: | ---: | --- | --- |",
     ]
     for row in rows:
         lines.append(
-            "| {name} | {status} | {time_range} | {score:.6f} | {margin:.6f} | {reason} |".format(
+            "| {name} | {status} | {time_range} | {score:.6f} | {margin:.6f} | {runner_up_name} | {reason} |".format(
                 name=row["step_name"],
                 status=row["status"],
                 time_range=row["best_time_range"],
                 score=float(row["best_score"]),
                 margin=float(row["margin"]),
+                runner_up_name=row.get("runner_up_step_name", "--"),
                 reason=row["reason"],
             )
         )

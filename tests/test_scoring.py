@@ -4,6 +4,7 @@ from scripts.score_steps import (
     compute_similarity_matrix,
     summarize_steps,
     summarize_steps_sequence,
+    write_report_md,
 )
 
 
@@ -51,6 +52,36 @@ def test_summarize_steps_marks_completed_missing_and_uncertain():
     assert rows[2]["status"] == "uncertain"
     assert rows[0]["best_window_id"] == "window_000001"
     assert rows[2]["best_time_range"] == "00:16.000-00:24.000"
+    assert rows[0]["runner_up_step_name"] == "步骤二"
+    assert rows[0]["runner_up_score"] == 0.2
+    assert rows[2]["runner_up_step_name"] == "步骤二"
+
+
+def test_write_report_md_includes_runner_up_step_name(tmp_path):
+    rows = [
+        {
+            "step_id": "step_01",
+            "step_name": "步骤一",
+            "best_window_id": "window_000001",
+            "best_time_range": "00:00.000-00:01.000",
+            "candidate_window_id": "window_000001",
+            "candidate_time_range": "00:00.000-00:01.000",
+            "best_score": 0.91,
+            "margin": 0.21,
+            "runner_up_step_id": "step_02",
+            "runner_up_step_name": "步骤二",
+            "runner_up_score": 0.7,
+            "status": "completed",
+            "reason": "分数和 margin 均达到阈值",
+        }
+    ]
+
+    report_path = tmp_path / "report.md"
+    write_report_md(report_path, rows)
+
+    report = report_path.read_text(encoding="utf-8")
+    assert "同一窗口第二名步骤" in report
+    assert "| 步骤一 | completed | 00:00.000-00:01.000 | 0.910000 | 0.210000 | 步骤二 |" in report
 
 
 def test_summarize_steps_flags_order_conflict_as_uncertain():
