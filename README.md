@@ -1,77 +1,72 @@
 # LLM SOP 视频工步识别
 
-本项目用于识别 SOP 操作视频中的工步完成情况。当前核心方案是用 `Qwen3-VL-Embedding` 对标准工步文本和视频时间窗口分别生成 embedding，再用相似度、顺序约束和阈值生成 `completed`、`missing`、`uncertain` 结果。
+LLM SOP 是一个基于多模态 embedding 的 SOP 视频工步识别项目。它将标准操作步骤描述和视频时间窗口映射到同一向量空间，通过相似度、顺序约束和阈值判断每个步骤是否完成。
 
-仓库只保存代码、测试、Web 页面、示例配置和可复用文档。模型权重、输入视频、切片、输出报告、官方依赖仓库和本地私有配置不进入 Git。
+当前实现使用 `Qwen3-VL-Embedding` 作为文本和视频 embedding 模型，适合做轻量零样本验证、工步漏检分析和视频片段定位。
 
-## 核心流程
+## 工作流程
 
 ```text
-步骤描述 -> 文本 embedding -> 步骤原型向量
-视频 -> 重叠时间窗口 -> 视频窗口 embedding
-步骤原型向量 x 视频窗口向量 -> cosine 相似度矩阵
-相似度矩阵 + 阈值/顺序策略 -> 工步状态、热力图、报告、可选标注视频
+步骤描述 -> 文本 embedding -> 步骤向量
+视频 -> 重叠时间窗口 -> 视频窗口向量
+步骤向量 x 视频窗口向量 -> 相似度矩阵
+相似度矩阵 -> 工步状态、热力图、报告
 ```
 
-几分钟长视频不要直接压成一个向量。默认配置会把视频切成短窗口，再查找每个工步在时间轴上的相似度峰值。
+项目不会把整段长视频直接压成一个向量，而是先切成短窗口，再在时间轴上查找每个 SOP 步骤的相似度峰值。
+
+## 功能
+
+- 按固定窗口和步长切分视频
+- 为 SOP 步骤描述生成文本 embedding
+- 为视频窗口生成多模态 embedding
+- 支持单 GPU 和多 GPU 视频窗口编码
+- 输出步骤状态、相似度矩阵、热力图和 Markdown 报告
+- 可根据识别结果生成带工步标签的视频
+- 提供简单 Web 页面用于上传视频并查看识别结果
+- 提供不加载大模型的单元测试
 
 ## 目录结构
 
 ```text
 configs/
   run.example.yaml              # 通用运行配置模板
-  run.operation_case_1s.yaml    # 工步案例默认配置，Web 服务也读取它
-  steps.example.yaml            # 通用工步模板
-  steps.operation_case.yaml     # 工步案例步骤定义
+  run.operation_case_1s.yaml    # 示例工步案例配置
+  steps.example.yaml            # 通用步骤模板
+  steps.operation_case.yaml     # 示例工步案例步骤
 scripts/
   split_video.py                # 切分视频窗口
   embed_steps.py                # 生成步骤文本 embedding
   embed_windows.py              # 生成视频窗口 embedding
   embed_windows_parallel.py     # 多 GPU 并行生成视频窗口 embedding
-  score_steps.py                # 打分、热力图、CSV 和 Markdown 报告
-  render_labeled_video.py       # 根据识别结果生成带工步标签的视频
-  remote_*.py                   # 远端环境探测、上传和基准测试辅助脚本
+  score_steps.py                # 计算相似度、分数和报告
+  render_labeled_video.py       # 生成带工步标签的视频
 web/
-  index.html                    # Web 上传和识别页面
+  index.html                    # Web 页面
 web_app.py                      # 内置 HTTP 服务
-tests/                          # 不加载大模型的单元测试
-docs/                           # 设计和实现记录
+tests/                          # 单元测试
+docs/                           # 设计文档
 ```
 
-运行时在服务器或本地自行创建以下目录，默认都被 `.gitignore` 忽略：
+运行时会生成或使用以下目录，默认不进入 Git：
 
 ```text
-deps/       # 官方 Qwen3-VL-Embedding 仓库和虚拟环境
+deps/       # 外部依赖仓库和虚拟环境
 models/     # 模型权重
 data/       # 输入视频、上传视频和切片窗口
 outputs/    # embedding、分数、热力图、报告和 Web 任务结果
 ```
 
-## 快速开始
+## 环境准备
 
-### 1. 准备项目
+### 1. 克隆项目
 
 ```bash
 git clone git@github.com:zkez/llm_sop.git
 cd llm_sop
 ```
 
-如果是在当前开发机器上维护核心代码，推荐路径是：
-
-```bash
-cd /Users/junk/zk/junk/llm_sop
-```
-
-远端 4090 服务器默认部署路径：
-
-```bash
-ssh 4090
-cd /mnt/project/zk/llm_sop
-```
-
-### 2. 安装官方依赖环境
-
-官方模型代码单独放在 `deps/`，不要提交到本仓库。
+### 2. 安装 Qwen3-VL-Embedding
 
 ```bash
 mkdir -p deps
@@ -80,14 +75,18 @@ git clone https://github.com/QwenLM/Qwen3-VL-Embedding.git deps/Qwen3-VL-Embeddi
 cd deps/Qwen3-VL-Embedding
 bash scripts/setup_environment.sh
 cd ../..
+```
 
+激活官方环境后安装本项目轻量依赖：
+
+```bash
 source deps/Qwen3-VL-Embedding/.venv/bin/activate
 pip install -r requirements.txt
 ```
 
-默认配置使用 `attn_implementation: sdpa`，优先保证可跑通。如果服务器已正确安装 `flash-attn`，可以在配置里改为 `flash_attention_2`。
+默认配置使用 `attn_implementation: sdpa`。如果环境已正确安装 `flash-attn`，可以在配置中改为 `flash_attention_2`。
 
-### 3. 下载模型权重
+### 3. 下载模型
 
 Hugging Face：
 
@@ -103,231 +102,153 @@ mkdir -p models
 modelscope download --model qwen/Qwen3-VL-Embedding-2B --local_dir ./models/Qwen3-VL-Embedding-2B
 ```
 
-第一轮建议先用 2B 模型跑通流程，确认方案有效后再按显存切换到 8B。
+建议先用 2B 模型跑通流程，再根据显存和精度需求切换更大的模型。
 
-### 4. 放置数据和配置
+## 配置
 
-通用实验：
+复制配置模板：
 
 ```bash
 cp configs/run.example.yaml configs/run.yaml
 cp configs/steps.example.yaml configs/steps.yaml
-mkdir -p data
-# 把输入视频放到 data/input.mp4，或修改 configs/run.yaml 里的 video.path
 ```
 
-当前工步案例：
+修改 `configs/run.yaml` 中的模型、视频和输出路径：
 
-```bash
-mkdir -p data/operation_case
-# 把案例视频放到 data/operation_case/input.mp4
-# 使用 configs/run.operation_case_1s.yaml 和 configs/steps.operation_case.yaml
+```yaml
+model:
+  path: ./models/Qwen3-VL-Embedding-2B
+  qwen_repo_path: ./deps/Qwen3-VL-Embedding
+
+video:
+  path: ./data/input.mp4
+  windows_dir: ./data/windows
 ```
 
-每个步骤建议写 1-5 条能证明“已完成状态”的描述，避免只写物体名称。负例和边界条件可以写进 `negative_notes`，供后续规则或人工复核使用。
+修改 `configs/steps.yaml`，将示例步骤替换为真实 SOP 步骤。每个步骤建议写 1-5 条描述，重点描述“该步骤完成时画面中应该出现什么”。
 
 ## 命令行运行
 
-通用配置：
+### 1. 切分视频
 
 ```bash
 python scripts/split_video.py --config configs/run.yaml
+```
+
+### 2. 生成步骤文本 embedding
+
+```bash
 python scripts/embed_steps.py --config configs/run.yaml --steps configs/steps.yaml
+```
+
+### 3. 生成视频窗口 embedding
+
+```bash
 python scripts/embed_windows.py --config configs/run.yaml
+```
+
+多 GPU 并行：
+
+```bash
+python scripts/embed_windows_parallel.py --config configs/run.yaml --gpus 0,1,2,3
+```
+
+### 4. 打分并生成报告
+
+```bash
 python scripts/score_steps.py --config configs/run.yaml
 ```
 
-当前工步案例：
+### 5. 生成标注视频
 
 ```bash
-python scripts/split_video.py --config configs/run.operation_case_1s.yaml
-python scripts/embed_steps.py --config configs/run.operation_case_1s.yaml --steps configs/steps.operation_case.yaml
-python scripts/embed_windows.py --config configs/run.operation_case_1s.yaml
-python scripts/score_steps.py --config configs/run.operation_case_1s.yaml
+python scripts/render_labeled_video.py --config configs/run.yaml
 ```
-
-多 GPU 并行生成视频窗口 embedding：
-
-```bash
-python scripts/embed_windows_parallel.py --config configs/run.operation_case_1s.yaml --gpus 0,1,2,3
-```
-
-生成带工步标签的视频：
-
-```bash
-python scripts/render_labeled_video.py --config configs/run.operation_case_1s.yaml
-```
-
-主要输出：
-
-```text
-outputs/.../windows.csv
-outputs/.../step_embeddings.npy
-outputs/.../window_embeddings.npy
-outputs/.../similarity_matrix.csv
-outputs/.../scores.csv
-outputs/.../heatmap.png
-outputs/.../report.md
-outputs/.../labeled_output.mp4
-```
-
-`scores.csv` 是最重要的结果表，包含：
-
-```text
-step_id, step_name, best_time_range, best_score, margin, status, reason
-```
-
-状态含义：
-
-- `completed`：最高分达到完成阈值，且通过当前排序或 margin 规则。
-- `missing`：所有候选窗口分数都低，可能漏做该步骤。
-- `uncertain`：有候选窗口，但分数、margin 或顺序约束不足，需要复核。
 
 ## Web 页面
 
-服务器上启动：
+启动内置服务：
 
 ```bash
 source deps/Qwen3-VL-Embedding/.venv/bin/activate
 python web_app.py --host 0.0.0.0 --port 7860 --python deps/Qwen3-VL-Embedding/.venv/bin/python
 ```
 
-本地通过 SSH 端口转发访问：
-
-```bash
-ssh -L 7860:127.0.0.1:7860 4090
-```
-
-然后打开：
+访问：
 
 ```text
 http://127.0.0.1:7860
 ```
 
-Web 服务默认读取：
+Web 服务默认使用示例配置：
 
 ```text
 configs/run.operation_case_1s.yaml
 configs/steps.operation_case.yaml
 ```
 
-上传视频会写入 `data/web_uploads/`，任务输出会写入 `outputs/web_jobs/`，这些目录不会进入 Git。
+如需使用自己的工步和视频路径，可以修改配置文件或在代码中调整 `Analyzer` 初始化参数。
 
-## 本地和远端开发流程
+## 输出
 
-当前约定：
-
-- 本地核心仓库：`/Users/junk/zk/junk/llm_sop`
-- 远端运行目录：`4090:/mnt/project/zk/llm_sop`
-- GitHub 仓库：`git@github.com:zkez/llm_sop.git`
-- 数据、模型和运行输出保留在远端，不从远端拉回 Git 仓库。
-
-从远端同步核心代码到本地：
-
-```bash
-rsync -av \
-  --exclude data/ \
-  --exclude models/ \
-  --exclude outputs/ \
-  --exclude deps/ \
-  --exclude __pycache__/ \
-  --exclude .pytest_cache/ \
-  --exclude '*.pyc' \
-  4090:/mnt/project/zk/llm_sop/ /Users/junk/zk/junk/llm_sop/
-```
-
-本地修改后同步到远端：
-
-```bash
-rsync -av \
-  --exclude .git/ \
-  --exclude data/ \
-  --exclude models/ \
-  --exclude outputs/ \
-  --exclude deps/ \
-  --exclude __pycache__/ \
-  --exclude .pytest_cache/ \
-  --exclude '*.pyc' \
-  /Users/junk/zk/junk/llm_sop/ 4090:/mnt/project/zk/llm_sop/
-```
-
-远端测试：
-
-```bash
-ssh 4090
-cd /mnt/project/zk/llm_sop
-source deps/Qwen3-VL-Embedding/.venv/bin/activate
-python -m pytest tests -v
-python -m compileall scripts tests web_app.py
-```
-
-需要加载模型的端到端验证在远端跑：
-
-```bash
-python scripts/split_video.py --config configs/run.operation_case_1s.yaml
-python scripts/embed_steps.py --config configs/run.operation_case_1s.yaml --steps configs/steps.operation_case.yaml
-python scripts/embed_windows.py --config configs/run.operation_case_1s.yaml
-python scripts/score_steps.py --config configs/run.operation_case_1s.yaml
-```
-
-## Git 提交流程
-
-首次初始化本地仓库：
-
-```bash
-cd /Users/junk/zk/junk/llm_sop
-git init
-git branch -M main
-git remote add origin git@github.com:zkez/llm_sop.git
-```
-
-常规提交：
-
-```bash
-git status --short
-git add README.md .gitignore configs scripts tests web web_app.py docs
-git commit -m "整理项目说明"
-git push -u origin main
-```
-
-提交信息使用简单中文概括即可，例如：
+运行完成后会在配置指定的 `outputs` 路径下生成：
 
 ```text
-整理项目说明
-更新识别流程
-修复窗口打分
-补充远端测试
+windows.csv                 # 视频窗口清单
+step_embeddings.npy         # 步骤文本 embedding
+step_metadata.json          # 步骤元数据
+window_embeddings.npy       # 视频窗口 embedding
+window_metadata.json        # 视频窗口元数据
+similarity_matrix.csv       # 步骤 x 窗口相似度矩阵
+scores.csv                  # 步骤识别结果
+heatmap.png                 # 相似度热力图
+report.md                   # Markdown 报告
+labeled_output.mp4          # 可选，带工步标签的视频
 ```
 
-## 本地轻量验证
+`scores.csv` 是主要结果文件：
 
-这些测试不加载模型，适合在本地或远端快速检查代码结构：
-
-```bash
-python -m pytest tests -v
-python -m compileall scripts tests web_app.py
+```text
+step_id, step_name, best_time_range, best_score, margin, status, reason
 ```
 
-如果本地没有完整模型环境，只保证这些轻量测试通过即可；模型推理、真实视频和 Web 任务以远端 4090 服务器结果为准。
+状态说明：
+
+- `completed`：该步骤在视频中有较明确的匹配窗口。
+- `missing`：所有候选窗口分数较低，可能未完成。
+- `uncertain`：存在候选窗口，但分数、区分度或顺序约束不足，需要人工复核。
 
 ## 阈值调参
 
-第一轮不要完全依赖固定阈值。建议先看 `outputs/.../heatmap.png`、`scores.csv` 和 `report.md`，再调整：
+可在运行配置中调整：
 
 ```yaml
 scoring:
-  completion_threshold: 0.50
-  missing_threshold: 0.471
+  completion_threshold: 0.60
+  missing_threshold: 0.45
   margin_threshold: 0.05
   enforce_order: true
 ```
 
-漏检多时降低 `completion_threshold`；误检多时提高 `completion_threshold` 或 `margin_threshold`。窗口太少导致顺序解码不可用时，Web 服务会自动回退到独立打分。
+漏检较多时可以降低 `completion_threshold`；误检较多时可以提高 `completion_threshold` 或 `margin_threshold`。建议结合 `heatmap.png`、`scores.csv` 和 `report.md` 一起判断。
 
-## 注意事项
+## 测试
 
-- `data/`、`models/`、`outputs/`、`deps/` 不入库。
-- `configs/run.yaml` 和 `configs/steps.yaml` 是个人本地配置，不入库。
-- `configs/run.operation_case_1s.yaml` 是可复用案例配置，可以提交。
-- 远端已有数据和模型时，同步代码不要覆盖这些目录。
-- 如果热力图整体没有明显峰值，下一步再考虑加入 VLM 二次判定或更细的步骤描述。
+单元测试不加载大模型，主要验证配置、向量处理、打分逻辑和 Web 服务辅助逻辑：
+
+```bash
+python -m pytest tests -v
+python -m compileall scripts tests web_app.py
+```
+
+## 数据和模型
+
+以下内容默认不提交到 Git：
+
+- `data/`
+- `models/`
+- `outputs/`
+- `deps/`
+- 本地私有配置，如 `configs/run.yaml` 和 `configs/steps.yaml`
+
+这样可以保持仓库只包含可复用代码、示例配置、测试和文档。
