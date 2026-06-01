@@ -146,6 +146,77 @@ def test_summarize_steps_keeps_uncompleted_previous_steps_in_later_margin():
     assert rows[1]["runner_up_step_name"] == "步骤一"
 
 
+def test_summarize_steps_skips_equivalent_steps_when_calculating_margin():
+    matrix = np.array(
+        [
+            [0.90],
+            [0.80],
+            [0.78],
+        ]
+    )
+    steps = [
+        {"id": "step_03_scan_into_system", "name": "扫入系统"},
+        {"id": "step_12_traceability_scan", "name": "追溯扫码"},
+        {"id": "step_04_pre_loosen_bolts", "name": "预松螺栓"},
+    ]
+    windows = [
+        {"window_id": "window_000001", "start": 0.0, "end": 1.0, "time_range": "00:00.000-00:01.000"},
+    ]
+
+    rows = summarize_steps(
+        matrix,
+        steps,
+        windows,
+        completion_threshold=0.60,
+        missing_threshold=0.45,
+        margin_threshold=0.05,
+        enforce_order=True,
+        equivalent_step_groups=[["step_03_scan_into_system", "step_12_traceability_scan"]],
+    )
+
+    assert rows[0]["status"] == "completed"
+    assert rows[0]["margin"] == 0.12
+    assert rows[0]["runner_up_step_name"] == "预松螺栓"
+
+
+def test_summarize_steps_sequence_skips_equivalent_steps_when_calculating_margin():
+    matrix = np.array(
+        [
+            [0.90, 0.10, 0.10],
+            [0.10, 0.80, 0.10],
+            [0.78, 0.70, 0.85],
+        ]
+    )
+    steps = [
+        {"id": "step_03_scan_into_system", "name": "扫入系统"},
+        {"id": "step_12_traceability_scan", "name": "追溯扫码"},
+        {"id": "step_04_pre_loosen_bolts", "name": "预松螺栓"},
+    ]
+    windows = [
+        {
+            "window_id": f"window_{index + 1:06d}",
+            "start": float(index),
+            "end": float(index + 1),
+            "time_range": f"00:0{index}.000-00:0{index + 1}.000",
+        }
+        for index in range(matrix.shape[1])
+    ]
+
+    rows = summarize_steps_sequence(
+        matrix,
+        steps,
+        windows,
+        completion_threshold=0.60,
+        missing_threshold=0.45,
+        margin_threshold=0.05,
+        equivalent_step_groups=[["step_03_scan_into_system", "step_12_traceability_scan"]],
+    )
+
+    assert rows[0]["status"] == "completed"
+    assert rows[0]["margin"] == 0.12
+    assert rows[0]["runner_up_step_name"] == "预松螺栓"
+
+
 def test_summarize_steps_flags_order_conflict_as_uncertain():
     matrix = np.array(
         [

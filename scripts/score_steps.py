@@ -79,6 +79,19 @@ def _window_runner_up(
     }
 
 
+def _build_equivalent_step_indices(
+    steps: list[dict[str, Any]],
+    equivalent_step_groups: list[list[str]] | None = None,
+) -> dict[int, set[int]]:
+    step_index_by_id = {str(step["id"]): index for index, step in enumerate(steps)}
+    equivalent_indices = {index: set() for index in range(len(steps))}
+    for group in equivalent_step_groups or []:
+        group_indices = {step_index_by_id[step_id] for step_id in group if step_id in step_index_by_id}
+        for step_index in group_indices:
+            equivalent_indices[step_index].update(group_indices - {step_index})
+    return equivalent_indices
+
+
 def _window_center(window: dict[str, Any]) -> float:
     return (float(window["start"]) + float(window["end"])) / 2.0
 
@@ -179,6 +192,7 @@ def summarize_steps(
     enforce_order: bool,
     ignore_margin_for_completion: bool = False,
     score_median_context_seconds: float = 0.0,
+    equivalent_step_groups: list[list[str]] | None = None,
 ) -> list[dict[str, Any]]:
     if matrix.shape != (len(steps), len(windows)):
         raise ValueError("相似度矩阵形状必须等于 [步骤数, 窗口数]")
@@ -186,6 +200,7 @@ def summarize_steps(
     rows: list[dict[str, Any]] = []
     last_completed_start = -float("inf")
     completed_step_indices: set[int] = set()
+    equivalent_step_indices = _build_equivalent_step_indices(steps, equivalent_step_groups)
 
     for step_index, step in enumerate(steps):
         best_window_index = int(np.argmax(matrix[step_index]))
@@ -197,8 +212,9 @@ def summarize_steps(
             windows,
             score_median_context_seconds,
         )
-        margin = _window_margin(matrix, step_index, best_window_index, completed_step_indices)
-        runner_up = _window_runner_up(matrix, steps, step_index, best_window_index, completed_step_indices)
+        excluded_step_indices = completed_step_indices | equivalent_step_indices[step_index]
+        margin = _window_margin(matrix, step_index, best_window_index, excluded_step_indices)
+        runner_up = _window_runner_up(matrix, steps, step_index, best_window_index, excluded_step_indices)
 
         status, reason_parts = _classify_score(
             best_score,
@@ -280,6 +296,7 @@ def summarize_steps_sequence(
     min_gap_windows: int = 1,
     ignore_margin_for_completion: bool = False,
     score_median_context_seconds: float = 0.0,
+    equivalent_step_groups: list[list[str]] | None = None,
 ) -> list[dict[str, Any]]:
     if matrix.shape != (len(steps), len(windows)):
         raise ValueError("相似度矩阵形状必须等于 [步骤数, 窗口数]")
@@ -287,6 +304,7 @@ def summarize_steps_sequence(
     path = decode_monotonic_path(matrix, min_gap_windows=min_gap_windows)
     rows: list[dict[str, Any]] = []
     completed_step_indices: set[int] = set()
+    equivalent_step_indices = _build_equivalent_step_indices(steps, equivalent_step_groups)
     for step_index, window_index in enumerate(path):
         step = steps[step_index]
         window = windows[window_index]
@@ -297,8 +315,9 @@ def summarize_steps_sequence(
             windows,
             score_median_context_seconds,
         )
-        margin = _window_margin(matrix, step_index, window_index, completed_step_indices)
-        runner_up = _window_runner_up(matrix, steps, step_index, window_index, completed_step_indices)
+        excluded_step_indices = completed_step_indices | equivalent_step_indices[step_index]
+        margin = _window_margin(matrix, step_index, window_index, excluded_step_indices)
+        runner_up = _window_runner_up(matrix, steps, step_index, window_index, excluded_step_indices)
         status, reason_parts = _classify_score(
             best_score,
             margin,
@@ -440,6 +459,7 @@ def main() -> None:
     decode_strategy = str(scoring.get("decode_strategy", "sequence")).lower()
     ignore_margin_for_completion = bool(scoring.get("ignore_margin_for_completion", False))
     score_median_context_seconds = float(scoring.get("score_median_context_seconds", 0.0))
+    equivalent_step_groups = scoring.get("equivalent_step_groups", [])
     if decode_strategy == "sequence":
         rows = summarize_steps_sequence(
             matrix,
@@ -451,6 +471,7 @@ def main() -> None:
             min_gap_windows=int(scoring.get("sequence_min_gap_windows", 1)),
             ignore_margin_for_completion=ignore_margin_for_completion,
             score_median_context_seconds=score_median_context_seconds,
+            equivalent_step_groups=equivalent_step_groups,
         )
     elif decode_strategy == "independent":
         rows = summarize_steps(
@@ -463,6 +484,7 @@ def main() -> None:
             enforce_order=bool(scoring.get("enforce_order", True)),
             ignore_margin_for_completion=ignore_margin_for_completion,
             score_median_context_seconds=score_median_context_seconds,
+            equivalent_step_groups=equivalent_step_groups,
         )
     else:
         raise ValueError(f"未知 decode_strategy: {decode_strategy}")

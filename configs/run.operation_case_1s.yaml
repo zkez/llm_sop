@@ -23,6 +23,8 @@ scoring:
   missing_threshold: 0.471
   margin_threshold: 0.05
   enforce_order: true
+  equivalent_step_groups:
+    - [step_03_scan_into_system, step_12_traceability_scan]
 
 outputs:
   windows_csv: ./outputs/operation_case_1s/windows.csv
