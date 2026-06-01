@@ -84,6 +84,68 @@ def test_write_report_md_includes_runner_up_step_name(tmp_path):
     assert "| 步骤一 | completed | 00:00.000-00:01.000 | 0.910000 | 0.210000 | 步骤二 |" in report
 
 
+def test_summarize_steps_excludes_completed_previous_steps_from_later_margin():
+    matrix = np.array(
+        [
+            [0.80],
+            [0.70],
+        ]
+    )
+    steps = [
+        {"id": "step_01", "name": "步骤一"},
+        {"id": "step_02", "name": "步骤二"},
+    ]
+    windows = [
+        {"window_id": "window_000001", "start": 0.0, "end": 1.0, "time_range": "00:00.000-00:01.000"},
+    ]
+
+    rows = summarize_steps(
+        matrix,
+        steps,
+        windows,
+        completion_threshold=0.60,
+        missing_threshold=0.45,
+        margin_threshold=0.05,
+        enforce_order=True,
+    )
+
+    assert rows[0]["status"] == "completed"
+    assert rows[1]["status"] == "completed"
+    assert rows[1]["margin"] == 0.70
+    assert rows[1]["runner_up_step_name"] == "--"
+
+
+def test_summarize_steps_keeps_uncompleted_previous_steps_in_later_margin():
+    matrix = np.array(
+        [
+            [0.59],
+            [0.70],
+        ]
+    )
+    steps = [
+        {"id": "step_01", "name": "步骤一"},
+        {"id": "step_02", "name": "步骤二"},
+    ]
+    windows = [
+        {"window_id": "window_000001", "start": 0.0, "end": 1.0, "time_range": "00:00.000-00:01.000"},
+    ]
+
+    rows = summarize_steps(
+        matrix,
+        steps,
+        windows,
+        completion_threshold=0.60,
+        missing_threshold=0.45,
+        margin_threshold=0.05,
+        enforce_order=True,
+    )
+
+    assert rows[0]["status"] == "uncertain"
+    assert rows[1]["status"] == "completed"
+    assert rows[1]["margin"] == 0.11
+    assert rows[1]["runner_up_step_name"] == "步骤一"
+
+
 def test_summarize_steps_flags_order_conflict_as_uncertain():
     matrix = np.array(
         [

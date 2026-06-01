@@ -26,12 +26,33 @@ def compute_similarity_matrix(step_embeddings: np.ndarray, window_embeddings: np
     return step_vectors @ window_vectors.T
 
 
-def _window_margin(matrix: np.ndarray, step_index: int, window_index: int) -> float:
+def _competing_window_scores(
+    matrix: np.ndarray,
+    step_index: int,
+    window_index: int,
+    excluded_step_indices: set[int] | None = None,
+) -> np.ndarray:
+    window_scores = np.asarray(matrix[:, window_index], dtype=np.float32).copy()
+    excluded = set(excluded_step_indices or set())
+    excluded.add(step_index)
+    for excluded_index in excluded:
+        if 0 <= excluded_index < len(window_scores):
+            window_scores[excluded_index] = -np.inf
+    return window_scores
+
+
+def _window_margin(
+    matrix: np.ndarray,
+    step_index: int,
+    window_index: int,
+    excluded_step_indices: set[int] | None = None,
+) -> float:
     score = float(matrix[step_index, window_index])
-    if matrix.shape[0] == 1:
+    competing_scores = _competing_window_scores(matrix, step_index, window_index, excluded_step_indices)
+    finite_scores = competing_scores[np.isfinite(competing_scores)]
+    if len(finite_scores) == 0:
         return score
-    other_scores = np.delete(matrix[:, window_index], step_index)
-    return score - float(other_scores.max())
+    return score - float(finite_scores.max())
 
 
 def _window_runner_up(
@@ -39,15 +60,16 @@ def _window_runner_up(
     steps: list[dict[str, Any]],
     step_index: int,
     window_index: int,
+    excluded_step_indices: set[int] | None = None,
 ) -> dict[str, Any]:
-    if matrix.shape[0] == 1:
+    window_scores = _competing_window_scores(matrix, step_index, window_index, excluded_step_indices)
+    finite_indices = np.flatnonzero(np.isfinite(window_scores))
+    if len(finite_indices) == 0:
         return {
             "runner_up_step_id": "--",
             "runner_up_step_name": "--",
             "runner_up_score": 0.0,
         }
-    window_scores = np.asarray(matrix[:, window_index], dtype=np.float32).copy()
-    window_scores[step_index] = -np.inf
     runner_up_index = int(np.argmax(window_scores))
     runner_up_step = steps[runner_up_index]
     return {
@@ -163,6 +185,7 @@ def summarize_steps(
 
     rows: list[dict[str, Any]] = []
     last_completed_start = -float("inf")
+    completed_step_indices: set[int] = set()
 
     for step_index, step in enumerate(steps):
         best_window_index = int(np.argmax(matrix[step_index]))
@@ -174,8 +197,8 @@ def summarize_steps(
             windows,
             score_median_context_seconds,
         )
-        margin = _window_margin(matrix, step_index, best_window_index)
-        runner_up = _window_runner_up(matrix, steps, step_index, best_window_index)
+        margin = _window_margin(matrix, step_index, best_window_index, completed_step_indices)
+        runner_up = _window_runner_up(matrix, steps, step_index, best_window_index, completed_step_indices)
 
         status, reason_parts = _classify_score(
             best_score,
@@ -197,6 +220,7 @@ def summarize_steps(
 
         if status == "completed":
             last_completed_start = float(best_window["start"])
+            completed_step_indices.add(step_index)
 
         rows.append(_build_summary_row(step, best_window, best_score, margin, runner_up, status, reason_parts))
 
@@ -262,6 +286,7 @@ def summarize_steps_sequence(
 
     path = decode_monotonic_path(matrix, min_gap_windows=min_gap_windows)
     rows: list[dict[str, Any]] = []
+    completed_step_indices: set[int] = set()
     for step_index, window_index in enumerate(path):
         step = steps[step_index]
         window = windows[window_index]
@@ -272,8 +297,8 @@ def summarize_steps_sequence(
             windows,
             score_median_context_seconds,
         )
-        margin = _window_margin(matrix, step_index, window_index)
-        runner_up = _window_runner_up(matrix, steps, step_index, window_index)
+        margin = _window_margin(matrix, step_index, window_index, completed_step_indices)
+        runner_up = _window_runner_up(matrix, steps, step_index, window_index, completed_step_indices)
         status, reason_parts = _classify_score(
             best_score,
             margin,
@@ -284,6 +309,8 @@ def summarize_steps_sequence(
         )
         reason_parts = score_reason_parts + reason_parts
         reason_parts.append("时序解码选择窗口")
+        if status == "completed":
+            completed_step_indices.add(step_index)
         rows.append(_build_summary_row(step, window, best_score, margin, runner_up, status, reason_parts))
     return rows
 
