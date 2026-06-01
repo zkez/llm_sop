@@ -1,0 +1,36 @@
+model:
+  path: ./models/Qwen3-VL-Embedding-2B
+  qwen_repo_path: ./deps/Qwen3-VL-Embedding
+  torch_dtype: bfloat16
+  attn_implementation: sdpa
+  instruction: 根据标准化操作步骤描述，检索视频中语义最相关、最能证明该步骤完成的片段。
+
+video:
+  path: ./data/operation_case/input.mp4
+  windows_dir: ./data/operation_case_1s/windows
+  window_seconds: 2
+  stride_seconds: 1
+  min_window_seconds: 1
+  skip_existing: true
+
+embedding:
+  batch_size: 1
+  fps: 2.0
+  max_frames: 4
+
+scoring:
+  completion_threshold: 0.50
+  missing_threshold: 0.471
+  margin_threshold: 0.05
+  enforce_order: true
+
+outputs:
+  windows_csv: ./outputs/operation_case_1s/windows.csv
+  step_embeddings: ./outputs/operation_case_1s/step_embeddings.npy
+  step_metadata: ./outputs/operation_case_1s/step_metadata.json
+  window_embeddings: ./outputs/operation_case_1s/window_embeddings.npy
+  window_metadata: ./outputs/operation_case_1s/window_metadata.json
+  similarity_matrix_csv: ./outputs/operation_case_1s/similarity_matrix.csv
+  scores_csv: ./outputs/operation_case_1s/scores.csv
+  heatmap_png: ./outputs/operation_case_1s/heatmap.png
+  report_md: ./outputs/operation_case_1s/report.md

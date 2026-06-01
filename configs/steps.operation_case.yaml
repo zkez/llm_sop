@@ -1,0 +1,65 @@
+steps:
+  - id: step_01_power_cable_connection
+    name: 接电连接
+    descriptions:
+      - 工人将黄、绿、红三色高压线束分别插入顶部接口，完成接电连接。
+
+  - id: step_02_aviation_plug_connection
+    name: 航插连接
+    descriptions:
+      - 工人将黑色航空插头插入侧面接口，完成航插连接。
+
+  - id: step_03_scan_into_system
+    name: 扫入系统
+    descriptions:
+      - 工人使用手持扫码枪扫描工件条码。
+
+  - id: step_04_pre_loosen_bolts
+    name: 预松螺栓
+    descriptions:
+      - 工人使用工具对侧面的螺栓进行预松操作。
+
+  - id: step_05_assemble_gasket
+    name: 装配黑色橡胶圈
+    descriptions:
+      - 工人取黑色橡胶密封垫。
+
+  - id: step_06_adjust_resolver
+    name: 调旋变
+    descriptions:
+      - 工人使用长柄工具插入中心孔，进行旋转变压器的角度调节。
+
+  - id: step_07_install_bolts
+    name: 装螺栓
+    descriptions:
+      - 工人使用电动螺丝刀将侧面螺栓安装并初步紧固。
+
+  - id: step_08_torque_tightening
+    name: 打扭力
+    descriptions:
+      - 工人换用扭矩扳手，对螺栓进行定扭力锁紧。
+
+  - id: step_09_mark_bolt_anti_loose
+    name: 画防松标识
+    descriptions:
+      - 工人使用蓝色记号笔在螺栓与壳体接缝处画线，做防松标识。
+
+  - id: step_10_mark_resolver_anti_loose
+    name: 旋变防松标识
+    descriptions:
+      - 工人使用红色记号笔在旋变调节位置画线，做旋变防松标识。
+
+  - id: step_11_apply_glue
+    name: 点胶
+    descriptions:
+      - 工人使用红色胶枪，在密封垫边缘及螺栓孔周围进行点胶密封。
+
+  - id: step_12_traceability_scan
+    name: 追溯扫码
+    descriptions:
+      - 工人再次使用扫码枪扫描工件。
+
+  - id: step_13_attach_angle_label
+    name: 贴角度标签
+    descriptions:
+      - 工人撕下角度标签贴在侧面。

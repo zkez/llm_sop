@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SOP 视频行为识别</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --text: #172026;
+      --muted: #66727f;
+      --border: #dce2e8;
+      --accent: #146c94;
+      --active: #17a36b;
+      --active-bg: #e5f7ef;
+      --warn: #bf7b10;
+      --warn-bg: #fff1d7;
+      --missing: #8b98a7;
+      --error: #c63f3f;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background: var(--bg);
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      min-height: 100vh;
+    }
+
+    .workspace {
+      padding: 22px;
+      display: grid;
+      grid-template-rows: auto minmax(320px, 1fr) auto;
+      gap: 14px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.2;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    .job-state {
+      min-width: 140px;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--muted);
+      text-align: center;
+      font-size: 14px;
+    }
+
+    .video-panel,
+    .controls {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+
+    .video-panel {
+      min-height: 320px;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+    }
+
+    video {
+      width: 100%;
+      height: 100%;
+      min-height: 320px;
+      max-height: calc(100vh - 210px);
+      object-fit: contain;
+      background: #111820;
+    }
+
+    .empty-video {
+      display: grid;
+      gap: 8px;
+      place-items: center;
+      color: var(--muted);
+      padding: 48px 20px;
+      text-align: center;
+    }
+
+    .empty-video strong {
+      color: var(--text);
+      font-size: 18px;
+    }
+
+    .controls {
+      padding: 14px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+    }
+
+    input[type="file"] {
+      width: 100%;
+      color: var(--muted);
+    }
+
+    .thresholds {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(130px, 1fr));
+      gap: 10px;
+    }
+
+    .threshold {
+      display: grid;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .threshold input {
+      width: 100%;
+      height: 36px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0 10px;
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    .primary {
+      border: 0;
+      border-radius: 8px;
+      background: var(--accent);
+      color: white;
+      min-width: 112px;
+      height: 40px;
+      padding: 0 16px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .primary:disabled {
+      cursor: not-allowed;
+      background: #a7b4bf;
+    }
+
+    .log {
+      grid-column: 1 / -1;
+      min-height: 42px;
+      max-height: 120px;
+      padding: 10px 12px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      overflow: auto;
+    }
+
+    .steps-panel {
+      border-left: 1px solid var(--border);
+      padding: 18px;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: 14px;
+      background: #fbfcfd;
+    }
+
+    .steps-header {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .steps-header h2 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.2;
+    }
+
+    .counts {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .steps {
+      display: grid;
+      gap: 8px;
+      align-content: start;
+      overflow: auto;
+      padding-right: 2px;
+    }
+
+    .step {
+      width: 100%;
+      min-height: 54px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: white;
+      color: var(--text);
+      display: grid;
+      grid-template-columns: 30px minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      padding: 9px 10px;
+      text-align: left;
+    }
+
+    .index {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: #edf1f4;
+      color: #51606d;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .name {
+      display: block;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .meta {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 3px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .badge {
+      min-width: 58px;
+      padding: 4px 7px;
+      border-radius: 999px;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 700;
+      background: #edf1f4;
+      color: #51606d;
+    }
+
+    .step.completed {
+      background: var(--active-bg);
+      border-color: rgba(23, 163, 107, 0.72);
+      box-shadow: 0 0 0 2px rgba(23, 163, 107, 0.13);
+    }
+
+    .step.completed .index,
+    .step.completed .badge {
+      background: var(--active);
+      color: white;
+    }
+
+    .step.uncertain {
+      background: var(--warn-bg);
+      border-color: rgba(191, 123, 16, 0.58);
+    }
+
+    .step.uncertain .index,
+    .step.uncertain .badge {
+      background: var(--warn);
+      color: white;
+    }
+
+    .step.missing .badge {
+      background: #eef1f4;
+      color: var(--missing);
+    }
+
+    .step.running .badge {
+      background: var(--accent);
+      color: white;
+    }
+
+    .error {
+      color: var(--error);
+    }
+
+    @media (max-width: 860px) {
+      .app { grid-template-columns: 1fr; }
+      .workspace { padding: 14px; }
+      .steps-panel {
+        border-left: 0;
+        border-top: 1px solid var(--border);
+        min-height: 50vh;
+      }
+      .controls { grid-template-columns: 1fr; }
+      .thresholds { grid-template-columns: 1fr; }
+      .primary { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="workspace">
+      <div class="topbar">
+        <h1>SOP 视频行为识别</h1>
+        <div id="jobState" class="job-state">待上传</div>
+      </div>
+      <section class="video-panel" id="videoPanel">
+        <div class="empty-video">
+          <strong>视频预览</strong>
+          <span id="fileName">未选择文件</span>
+        </div>
+      </section>
+      <section class="controls">
+        <input id="videoInput" type="file" accept="video/*" />
+        <button id="startButton" class="primary" disabled>开始识别</button>
+        <div class="thresholds">
+          <label class="threshold">
+            亮灯阈值
+            <input id="completionThreshold" type="number" min="0" max="1" step="0.01" value="0.44" />
+          </label>
+          <label class="threshold">
+            复核下限
+            <input id="missingThreshold" type="number" min="0" max="1" step="0.01" value="0.40" />
+          </label>
+        </div>
+        <div id="log" class="log">等待视频文件</div>
+      </section>
+    </section>
+    <aside class="steps-panel">
+      <div class="steps-header">
+        <h2>行为按钮</h2>
+        <div id="counts" class="counts">0 / 13</div>
+      </div>
+      <div id="steps" class="steps"></div>
+    </aside>
+  </main>
+
+  <script>
+    const input = document.getElementById('videoInput');
+    const startButton = document.getElementById('startButton');
+    const videoPanel = document.getElementById('videoPanel');
+    const fileName = document.getElementById('fileName');
+    const stepsRoot = document.getElementById('steps');
+    const jobState = document.getElementById('jobState');
+    const log = document.getElementById('log');
+    const counts = document.getElementById('counts');
+    const completionThreshold = document.getElementById('completionThreshold');
+    const missingThreshold = document.getElementById('missingThreshold');
+    let steps = [];
+    let selectedFile = null;
+    let pollTimer = null;
+
+    const labels = {
+      pending: '待识别',
+      running: '识别中',
+      completed: '亮',
+      uncertain: '待复核',
+      missing: '未亮'
+    };
+
+    async function init() {
+      const response = await fetch('/api/steps');
+      const payload = await response.json();
+      steps = payload.steps;
+      renderSteps(steps.map(step => ({...step, status: 'pending'})));
+    }
+
+    function renderSteps(rows) {
+      const byId = new Map(rows.map(row => [row.step_id || row.id, row]));
+      let activeCount = 0;
+      stepsRoot.innerHTML = '';
+      steps.forEach((step, index) => {
+        const row = byId.get(step.id) || {};
+        const status = row.status || 'pending';
+        if (status === 'completed') activeCount += 1;
+        const button = document.createElement('button');
+        button.className = `step ${status}`;
+        button.type = 'button';
+        button.disabled = true;
+        const scoreText = typeof row.best_score === 'number' ? ` · ${row.best_score.toFixed(3)}` : '';
+        button.innerHTML = `
+          <span class="index">${String(index + 1).padStart(2, '0')}</span>
+          <span>
+            <span class="name">${escapeHtml(step.name)}</span>
+            <span class="meta">${escapeHtml(row.best_time_range || '--')}${scoreText}</span>
+          </span>
+          <span class="badge">${labels[status] || status}</span>
+        `;
+        button.title = row.reason || step.name;
+        stepsRoot.appendChild(button);
+      });
+      counts.textContent = `${activeCount} / ${steps.length}`;
+    }
+
+    input.addEventListener('change', () => {
+      selectedFile = input.files && input.files[0] ? input.files[0] : null;
+      startButton.disabled = !selectedFile;
+      if (!selectedFile) return;
+      fileName.textContent = selectedFile.name;
+      const url = URL.createObjectURL(selectedFile);
+      videoPanel.innerHTML = `<video src="${url}" controls></video>`;
+      log.textContent = '已选择视频';
+      jobState.textContent = '待开始';
+      renderSteps(steps.map(step => ({...step, status: 'pending'})));
+    });
+
+    startButton.addEventListener('click', async () => {
+      if (!selectedFile) return;
+      const thresholds = readThresholds();
+      if (!thresholds) return;
+      startButton.disabled = true;
+      jobState.textContent = '上传中';
+      log.textContent = '上传中';
+      renderSteps(steps.map(step => ({...step, status: 'running'})));
+
+      const form = new FormData();
+      form.append('video', selectedFile);
+      form.append('completion_threshold', thresholds.completion);
+      form.append('missing_threshold', thresholds.missing);
+      try {
+        const response = await fetch('/api/jobs', { method: 'POST', body: form });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || '上传失败');
+        pollJob(payload.job_id);
+      } catch (error) {
+        jobState.textContent = '失败';
+        log.innerHTML = `<span class="error">${escapeHtml(error.message)}</span>`;
+        startButton.disabled = false;
+      }
+    });
+
+    function readThresholds() {
+      const completion = Number(completionThreshold.value);
+      const missing = Number(missingThreshold.value);
+      if (!Number.isFinite(completion) || !Number.isFinite(missing)) {
+        log.innerHTML = `<span class="error">阈值必须是数字</span>`;
+        return null;
+      }
+      if (completion < 0 || completion > 1 || missing < 0 || missing > 1) {
+        log.innerHTML = `<span class="error">阈值必须在 0 到 1 之间</span>`;
+        return null;
+      }
+      if (missing >= completion) {
+        log.innerHTML = `<span class="error">复核下限必须小于亮灯阈值</span>`;
+        return null;
+      }
+      return {
+        completion: completion.toFixed(6),
+        missing: missing.toFixed(6)
+      };
+    }
+
+    async function pollJob(jobId) {
+      clearInterval(pollTimer);
+      const tick = async () => {
+        try {
+          const response = await fetch(`/api/jobs/${jobId}`);
+          const payload = await response.json();
+          if (!response.ok) throw new Error(payload.error || '任务不存在');
+          jobState.textContent = payload.stage || payload.state;
+          if (payload.steps && payload.steps.length) renderSteps(payload.steps);
+          const logs = payload.logs || [];
+          log.textContent = logs.length ? logs.slice(-3).join('\n') : (payload.stage || '');
+          if (payload.state === 'done' || payload.state === 'error') {
+            clearInterval(pollTimer);
+            startButton.disabled = false;
+            if (payload.state === 'error') {
+              jobState.textContent = '失败';
+              log.innerHTML = `<span class="error">${escapeHtml(payload.error || '识别失败')}</span>`;
+            }
+          }
+        } catch (error) {
+          clearInterval(pollTimer);
+          jobState.textContent = '连接失败';
+          log.innerHTML = `<span class="error">${escapeHtml(error.message)}</span>`;
+          startButton.disabled = false;
+        }
+      };
+      await tick();
+      pollTimer = setInterval(tick, 2000);
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    init().catch(error => {
+      log.innerHTML = `<span class="error">${escapeHtml(error.message)}</span>`;
+    });
+  </script>
+</body>
+</html>
