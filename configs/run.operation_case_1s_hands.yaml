@@ -30,8 +30,10 @@ hand_skeleton:
   source_windows_csv: ./outputs/operation_case_1s/windows.csv
   output_windows_csv: ./outputs/operation_case_1s_hands/windows.csv
   output_dir: ./data/operation_case_1s_hands/windows
+  model_asset_path: ./models/mediapipe/hand_landmarker.task
   max_num_hands: 2
   min_detection_confidence: 0.5
+  min_hand_presence_confidence: 0.5
   min_tracking_confidence: 0.5
   skip_existing: true
 

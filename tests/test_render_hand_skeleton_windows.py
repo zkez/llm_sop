@@ -1,7 +1,12 @@
 import csv
 from pathlib import Path
 
+import pytest
+
 from scripts.render_hand_skeleton_windows import (
+    _connection_indices,
+    _landmark_pixel_xy,
+    _require_task_model_path,
     build_output_row,
     resolve_hand_skeleton_config,
     render_windows,
@@ -14,6 +19,7 @@ def test_resolve_hand_skeleton_config_uses_section_defaults(tmp_path):
             "source_windows_csv": "./outputs/source/windows.csv",
             "output_dir": "./data/hands",
             "output_windows_csv": "./outputs/hands/windows.csv",
+            "model_asset_path": "./models/mediapipe/hand_landmarker.task",
             "max_num_hands": 1,
         },
         "outputs": {"windows_csv": "./outputs/fallback/windows.csv"},
@@ -24,7 +30,36 @@ def test_resolve_hand_skeleton_config_uses_section_defaults(tmp_path):
     assert resolved["source_windows_csv"] == tmp_path / "outputs/source/windows.csv"
     assert resolved["output_dir"] == tmp_path / "data/hands"
     assert resolved["output_windows_csv"] == tmp_path / "outputs/hands/windows.csv"
+    assert resolved["model_asset_path"] == tmp_path / "models/mediapipe/hand_landmarker.task"
     assert resolved["max_num_hands"] == 1
+
+
+def test_require_task_model_path_reports_download_command_when_missing(tmp_path):
+    missing_path = tmp_path / "models/mediapipe/hand_landmarker.task"
+
+    with pytest.raises(RuntimeError) as error:
+        _require_task_model_path({"model_asset_path": missing_path})
+
+    message = str(error.value)
+    assert str(missing_path) in message
+    assert "curl -L -o models/mediapipe/hand_landmarker.task" in message
+
+
+def test_connection_indices_accepts_mediapipe_connection_objects():
+    class Connection:
+        start = 2
+        end = 5
+
+    assert _connection_indices(Connection()) == (2, 5)
+    assert _connection_indices((1, 3)) == (1, 3)
+
+
+def test_landmark_pixel_xy_clamps_normalized_coordinates():
+    class Landmark:
+        x = 1.2
+        y = -0.1
+
+    assert _landmark_pixel_xy(Landmark(), width=100, height=50) == (99, 0)
 
 
 def test_build_output_row_replaces_path_and_keeps_window_metadata(tmp_path):

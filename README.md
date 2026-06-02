@@ -169,10 +169,13 @@ python scripts/render_labeled_video.py --config configs/run.yaml
 
 ### 可选：手部骨架叠加窗口对比
 
-如果希望测试“手部关键点骨架可视化后再做 embedding”的效果，可以先安装 MediaPipe：
+如果希望测试“手部关键点骨架可视化后再做 embedding”的效果，可以先安装 MediaPipe 并下载手部关键点模型：
 
 ```bash
-uv pip install mediapipe
+uv pip install mediapipe opencv-python
+mkdir -p models/mediapipe
+curl -L -o models/mediapipe/hand_landmarker.task \
+  https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task
 ```
 
 然后生成带手部骨架的视频窗口：
