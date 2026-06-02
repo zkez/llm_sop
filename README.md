@@ -171,6 +171,11 @@ python scripts/render_labeled_video.py --config configs/run.yaml
 如果需要检查每个视频窗口里模型能看到什么，可以单独准备生成式 Qwen-VL 模型，并运行：
 
 ```bash
+mkdir -p models
+modelscope download --model Qwen/Qwen2.5-VL-7B-Instruct --local_dir ./models/Qwen2.5-VL-7B-Instruct
+```
+
+```bash
 python scripts/describe_windows.py \
   --config configs/run.yaml \
   --model ./models/Qwen2.5-VL-7B-Instruct \

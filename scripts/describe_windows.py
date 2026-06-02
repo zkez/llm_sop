@@ -142,10 +142,19 @@ def _model_config(config: dict[str, Any], args: argparse.Namespace) -> dict[str,
 
 
 def load_generation_model(model_config: dict[str, Any], project_root: Path) -> tuple[Any, Any]:
+    raw_model_path = str(model_config["path"])
+    if _looks_like_local_path(raw_model_path):
+        local_model_path = resolve_project_path(raw_model_path, project_root)
+        if not local_model_path.exists():
+            raise FileNotFoundError(
+                f"生成式 Qwen-VL 模型目录不存在: {local_model_path}\n"
+                "请先下载生成式模型，或把 --model 改成可访问的 Hugging Face/ModelScope 模型 ID。"
+            )
+
     import torch
     from transformers import AutoProcessor
 
-    model_path = resolve_model_name_or_path(str(model_config["path"]), project_root)
+    model_path = resolve_model_name_or_path(raw_model_path, project_root)
     dtype_name = str(model_config.get("torch_dtype", "bfloat16"))
     torch_dtype = getattr(torch, dtype_name)
     kwargs: dict[str, Any] = {
@@ -175,7 +184,16 @@ def load_generation_model(model_config: dict[str, Any], project_root: Path) -> t
             return model, processor
         except Exception as error:
             last_error = error
-    raise RuntimeError(f"无法加载生成式 Qwen-VL 模型: {model_path}") from last_error
+    raise RuntimeError(f"无法加载生成式 Qwen-VL 模型: {model_path}；底层错误: {last_error}") from last_error
+
+
+def _looks_like_local_path(value: str) -> bool:
+    expanded = Path(value).expanduser()
+    return (
+        value.startswith((".", "~"))
+        or expanded.is_absolute()
+        or value.startswith(("models/", "deps/", "data/", "outputs/", "configs/"))
+    )
 
 
 def describe_window(

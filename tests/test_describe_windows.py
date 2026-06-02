@@ -3,6 +3,7 @@ import json
 
 from scripts.describe_windows import (
     build_description_record,
+    load_generation_model,
     parse_json_response,
     resolve_description_outputs,
     write_description_outputs,
@@ -97,3 +98,15 @@ def test_write_description_outputs_writes_jsonl_and_csv(tmp_path):
         rows = list(csv.DictReader(handle))
     assert rows[0]["window_id"] == "window_000001"
     assert rows[0]["visible_objects"] == "扫码枪; 标签"
+
+
+def test_load_generation_model_reports_missing_local_model_path(tmp_path):
+    missing_model = tmp_path / "models" / "Qwen2.5-VL-7B-Instruct"
+
+    try:
+        load_generation_model({"path": str(missing_model)}, tmp_path)
+    except FileNotFoundError as error:
+        assert "模型目录不存在" in str(error)
+        assert str(missing_model) in str(error)
+    else:
+        raise AssertionError("expected missing local model path to fail before loading transformers")
