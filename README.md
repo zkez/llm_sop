@@ -36,6 +36,7 @@ configs/
   steps.operation_case.yaml     # 示例工步案例步骤
 scripts/
   split_video.py                # 切分视频窗口
+  describe_windows.py           # 可选，用生成式 Qwen-VL 描述视频窗口
   embed_steps.py                # 生成步骤文本 embedding
   embed_windows.py              # 生成视频窗口 embedding
   embed_windows_parallel.py     # 多 GPU 并行生成视频窗口 embedding
@@ -163,6 +164,24 @@ python scripts/score_steps.py --config configs/run.yaml
 
 ```bash
 python scripts/render_labeled_video.py --config configs/run.yaml
+```
+
+### 可选：生成窗口画面描述
+
+如果需要检查每个视频窗口里模型能看到什么，可以单独准备生成式 Qwen-VL 模型，并运行：
+
+```bash
+python scripts/describe_windows.py \
+  --config configs/run.yaml \
+  --model ./models/Qwen2.5-VL-7B-Instruct \
+  --limit 10
+```
+
+该脚本只生成调试用描述文件，不参与现有 embedding 打分流程。输出默认写到：
+
+```text
+outputs/.../window_descriptions.jsonl
+outputs/.../window_descriptions.csv
 ```
 
 ## Web 页面

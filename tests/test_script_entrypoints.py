@@ -7,6 +7,7 @@ def test_scripts_can_run_help_when_called_by_path():
     project_root = Path(__file__).resolve().parents[1]
     scripts = [
         "scripts/split_video.py",
+        "scripts/describe_windows.py",
         "scripts/embed_steps.py",
         "scripts/embed_windows.py",
         "scripts/embed_windows_parallel.py",
