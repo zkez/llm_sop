@@ -41,6 +41,7 @@ scripts/
   embed_windows.py              # 生成视频窗口 embedding
   embed_windows_parallel.py     # 多 GPU 并行生成视频窗口 embedding
   score_steps.py                # 计算相似度、分数和报告
+  render_hand_skeleton_windows.py # 可选，叠加 MediaPipe 手部骨架窗口
   render_labeled_video.py       # 生成带工步标签的视频
 web/
   index.html                    # Web 页面
@@ -164,6 +165,34 @@ python scripts/score_steps.py --config configs/run.yaml
 
 ```bash
 python scripts/render_labeled_video.py --config configs/run.yaml
+```
+
+### 可选：手部骨架叠加窗口对比
+
+如果希望测试“手部关键点骨架可视化后再做 embedding”的效果，可以先安装 MediaPipe：
+
+```bash
+uv pip install mediapipe
+```
+
+然后生成带手部骨架的视频窗口：
+
+```bash
+python scripts/render_hand_skeleton_windows.py --config configs/run.operation_case_1s_hands.yaml
+```
+
+再按普通 embedding 流程跑对比配置：
+
+```bash
+python scripts/embed_windows.py --config configs/run.operation_case_1s_hands.yaml
+python scripts/score_steps.py --config configs/run.operation_case_1s_hands.yaml
+```
+
+对比原始结果和手部骨架结果：
+
+```text
+outputs/operation_case_1s/report.md
+outputs/operation_case_1s_hands/report.md
 ```
 
 ### 可选：生成窗口画面描述

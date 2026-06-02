@@ -12,6 +12,7 @@ def test_scripts_can_run_help_when_called_by_path():
         "scripts/embed_windows.py",
         "scripts/embed_windows_parallel.py",
         "scripts/render_labeled_video.py",
+        "scripts/render_hand_skeleton_windows.py",
         "scripts/score_steps.py",
     ]
 

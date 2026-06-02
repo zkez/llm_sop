@@ -5,3 +5,4 @@ PyYAML
 tqdm
 Pillow
 imageio-ffmpeg
+mediapipe
